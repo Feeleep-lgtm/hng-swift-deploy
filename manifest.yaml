@@ -1,0 +1,15 @@
+app:
+  name: swift-api
+  version: 1.0.0
+  port: 3000
+  mode: stable
+  health_path: /healthz
+nginx:
+  image: nginx:alpine
+  port: 8080
+  proxy_timeout: 60
+network:
+  name: swiftdeploy-net
+  driver: bridge
+chaos:
+  enabled: true
