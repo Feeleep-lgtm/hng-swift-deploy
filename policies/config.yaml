@@ -1,0 +1,6 @@
+services:
+  - name: swiftdeploy
+    plugins:
+      - name: rest
+        config:
+          url: http://localhost:8181

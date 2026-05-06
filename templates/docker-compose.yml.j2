@@ -1,5 +1,6 @@
 services:
   app:
+    build: .                    # This tells Docker to build from local Dockerfile
     image: {{ manifest.app.name }}:{{ manifest.app.version }}
     container_name: swiftdeploy-app
     restart: unless-stopped
@@ -9,7 +10,6 @@ services:
     environment:
       - MODE={{ manifest.app.mode }}
       - APP_VERSION={{ manifest.app.version }}
-      - APP_PORT={{ manifest.app.port }}
     networks:
       - {{ manifest.network.name }}
     healthcheck:
@@ -17,8 +17,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    security_opt:
-      - no-new-privileges:true
 
   nginx:
     image: {{ manifest.nginx.image }}
@@ -28,15 +26,23 @@ services:
       - "{{ manifest.nginx.port }}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx_logs:/var/log/nginx
     depends_on:
       - app
+    networks:
+      - {{ manifest.network.name }}
+
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: swiftdeploy-opa
+    restart: unless-stopped
+    ports:
+      - "{{ manifest.opa.port }}:8181"
+    volumes:
+      - ./policies:/policies:ro
+    command: ["run", "--server", "/policies"]
     networks:
       - {{ manifest.network.name }}
 
 networks:
   {{ manifest.network.name }}:
     driver: {{ manifest.network.driver }}
-
-volumes:
-  nginx_logs:
