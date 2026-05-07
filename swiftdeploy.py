@@ -4,6 +4,7 @@ import yaml
 import subprocess
 import time
 import requests
+import psutil
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
@@ -17,19 +18,24 @@ def load_manifest():
     with open(BASE_DIR / "manifest.yaml") as f:
         return yaml.safe_load(f)
 
-def query_opa(policy_path, input_data):
+def query_opa(package, input_data):
     try:
-        resp = requests.post(
-            f"{OPA_URL}/v1/data/{policy_path}",
-            json={"input": input_data},
-            timeout=5
-        )
+        resp = requests.post(f"{OPA_URL}/v1/data/{package}", json={"input": input_data}, timeout=5)
         if resp.status_code == 200:
-            result = resp.json()
-            return result.get("result", {})
-        return {"allow": False, "reason": f"OPA error: {resp.status_code}"}
+            result = resp.json().get("result", {})
+            return {
+                "allow": result.get("allow", False),
+                "reason": result.get("reason", "Policy passed")
+            }
+        return {"allow": False, "reason": f"OPA returned {resp.status_code}"}
     except:
         return {"allow": False, "reason": "OPA unreachable"}
+
+def get_host_stats():
+    return {
+        "disk_free_gb": round(psutil.disk_usage('/').free / (1024**3), 2),
+        "cpu_load": psutil.cpu_percent(interval=1) / 100
+    }
 
 def cmd_init():
     manifest = load_manifest()
@@ -37,20 +43,34 @@ def cmd_init():
         f.write(env.get_template("docker-compose.yml.j2").render(manifest=manifest))
     with open("nginx.conf", "w") as f:
         f.write(env.get_template("nginx.conf.j2").render(manifest=manifest))
-    print("✅ Generated configs from manifest")
+    print("✅ Generated configs")
 
 def cmd_deploy():
-    print("🔍 Pre-deploy OPA check...")
-    # TODO: Get host stats and query OPA
+    print("🔍 Running pre-deploy policy check...")
+    
+    input_data = {
+        "action": "deploy",
+        "host": get_host_stats()
+    }
+    
+    result = query_opa("infra", input_data)
+    
+    if not result["allow"]:
+        print(f"❌ DEPLOY BLOCKED: {result['reason']}")
+        return False
+    
+    print("✅ Pre-deploy check passed")
     cmd_init()
     subprocess.run(["docker", "compose", "up", "-d", "--build"])
+    return True
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python swiftdeploy.py <init|validate|deploy|promote|status>")
+        print("Usage: python swiftdeploy.py <init|validate|deploy|promote>")
         sys.exit(1)
 
     cmd = sys.argv[1]
+
     if cmd == "init":
         cmd_init()
     elif cmd == "deploy":

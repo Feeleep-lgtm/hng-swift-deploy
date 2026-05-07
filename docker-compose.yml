@@ -1,12 +1,8 @@
 services:
   app:
-    build: .                    # This tells Docker to build from local Dockerfile
+    build: .
     image: swift-api:1.1.0
-    container_name: swiftdeploy-app
     restart: unless-stopped
-    user: "1001:1001"
-    cap_drop:
-      - ALL
     environment:
       - MODE=stable
       - APP_VERSION=1.1.0
@@ -20,7 +16,6 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: swiftdeploy-nginx
     restart: unless-stopped
     ports:
       - "8080:80"
@@ -33,13 +28,12 @@ services:
 
   opa:
     image: openpolicyagent/opa:latest
-    container_name: swiftdeploy-opa
     restart: unless-stopped
     ports:
       - "8181:8181"
     volumes:
       - ./policies:/policies:ro
-    command: ["run", "--server", "/policies"]
+    command: ["run", "--server", "--log-level=info", "/policies"]
     networks:
       - swiftdeploy-net
 
